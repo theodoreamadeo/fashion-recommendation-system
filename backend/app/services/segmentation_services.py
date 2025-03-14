@@ -4,6 +4,8 @@ import numpy as np
 import time
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+import os
+from datetime import datetime
 
 model_path = r"C:\EID\fashion-recommendation-system\fashion-recommendation-system\backend\app\models\face_landmarker.task"
 
@@ -34,13 +36,11 @@ options = FaceLandmarkerOptions(
 
 # Define the triangulation for the face mesh
 def get_triangulation():
-    # Using MediaPipe Face Mesh's standard triangulation
     mp_face_mesh = mp.solutions.face_mesh
     return mp_face_mesh.FACEMESH_TESSELATION
 
 # Define facial feature connections for highlighting
 def get_facial_features():
-    # These indices may need to be adjusted based on your model
     left_eye = [(33, 7), (7, 163), (163, 144), (144, 145), 
                 (145, 153), (153, 154), (154, 155), (155, 133), 
                 (33, 133)]
@@ -129,16 +129,14 @@ def create_face_mask(frame, face_landmarks):
     
     # Extract face oval points
     face_oval_points = []
-    
-    # MediaPipe Face Landmarker uses a different landmark format than Face Mesh
-    # We need to convert the landmarks to pixel coordinates
+
+    # Convert the landmarks to pixel coordinates
     for landmark in face_landmarks:
         x = int(landmark.x * width)
         y = int(landmark.y * height)
         face_oval_points.append((x, y))
     
     # Get indices for face oval - using common face outline points
-    # These indices are approximate, may need adjustment
     face_oval_indices = [
         10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
         397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
@@ -157,6 +155,22 @@ def create_face_mask(frame, face_landmarks):
     
     return mask
 
+# Function to save the segmented face as a JPG file
+def save_segmented_face(segmented_face):
+    # Create a directory to save images if it doesn't exist
+    save_dir = "saved_faces"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
+    # Generate a filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = os.path.join(save_dir, f"segmented_face_{timestamp}.jpg")
+    
+    # Save the image
+    cv2.imwrite(filename, segmented_face)
+    
+    return filename
+
 def main():
     # Initialize webcam
     cap = cv2.VideoCapture(0)
@@ -168,6 +182,9 @@ def main():
     # Get triangulation and facial features
     triangulation = get_triangulation()
     facial_features = get_facial_features()
+
+    # Variables to store the segmented face for saving
+    current_segmented_face = None
     
     # Initialize face landmarker
     with FaceLandmarker.create_from_options(options) as landmarker:
@@ -209,13 +226,16 @@ def main():
                 # Draw the triangular mesh
                 mesh_visualization = draw_mesh(frame, face_landmarks, triangulation, facial_features)
                 
-                # Add FPS to the visualization
+                # # Add FPS to the visualization
                 cv2.putText(mesh_visualization, f"FPS: {fps:.1f}", (10, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 
                 # Create and apply face mask
                 face_mask = create_face_mask(frame, face_landmarks)
                 segmented_face = cv2.bitwise_and(frame, frame, mask=face_mask)
+
+                # Store the current segmented face
+                current_segmented_face = segmented_face.copy()
                 
                 # Show mesh visualization
                 cv2.imshow('Face Mesh', mesh_visualization)
@@ -228,10 +248,22 @@ def main():
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.imshow('MediaPipe Face Landmarker', frame)
+                cv2.imshow('Face Mesh', frame)
+
+                # Set current_segmented_face to None when no face is detected
+                current_segmented_face = None
             
-            # Break the loop if 'q' is pressed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # Check for keypress
+            key = cv2.waitKey(1) & 0xFF
+            
+            # If 'q' is pressed
+            if key == ord('q'):
+                # Save the segmented face if available
+                if current_segmented_face is not None:
+                    saved_path = save_segmented_face(current_segmented_face)
+                    print(f"Segmented face saved to: {saved_path}")
+                else:
+                    print("No face detected to save.")
                 break
     
     # Release resources
