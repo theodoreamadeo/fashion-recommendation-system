@@ -6,6 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import os
 from datetime import datetime
+import stone
 
 model_path = r"C:\EID\fashion-recommendation-system\fashion-recommendation-system\backend\app\models\face_landmarker.task"
 
@@ -86,7 +87,7 @@ def draw_mesh(frame, landmarks, triangulation, facial_features=None):
             pt2 = points[connection[1]]
             cv2.line(mesh_overlay, pt1, pt2, (255, 255, 255), 1)
     
-    # Draw colored facial features if provided
+    # Draw colored facial features
     if facial_features:
         # Left eye (red)
         for connection in facial_features["left_eye"]:
@@ -158,7 +159,8 @@ def create_face_mask(frame, face_landmarks):
 # Function to save the segmented face as a JPG file
 def save_segmented_face(segmented_face):
     # Create a directory to save images if it doesn't exist
-    save_dir = "saved_faces"
+    base_dir = r"C:\EID\fashion-recommendation-system\fashion-recommendation-system"
+    save_dir = os.path.join(base_dir, "saved_faces")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     
@@ -170,6 +172,21 @@ def save_segmented_face(segmented_face):
     cv2.imwrite(filename, segmented_face)
     
     return filename
+
+def analyze_skin_tone(image_path):
+    try:
+        # Proceess the image using stone
+        result = stone.process(image_path, image_type="color", return_report_image=True)
+
+        #Extract report image and results
+        report_images = result.pop("report_images")  # obtain and remove the report image from the `result`
+
+        face_id = 1
+        stone.show(report_images[face_id]) # Use `stone.show` instead in Python scripts
+
+    except Exception as e:
+        print(f"Error in skin tone analysis: {e}")
+        return None, None
 
 def main():
     # Initialize webcam
@@ -261,7 +278,15 @@ def main():
                 # Save the segmented face if available
                 if current_segmented_face is not None:
                     saved_path = save_segmented_face(current_segmented_face)
-                    print(f"Segmented face saved to: {saved_path}")
+                    print (f"Segmented face saved to: {saved_path}")
+                    
+                    # Analyze the skin tone with the stone library
+                    print("Analyzing skin tone...")
+                    analysis_image, analysis_result = analyze_skin_tone(saved_path)
+                    
+                    # Wait for user to press a key to close all windows
+                    print("Press any key to exit...")
+                    cv2.waitKey(0)
                 else:
                     print("No face detected to save.")
                 break
